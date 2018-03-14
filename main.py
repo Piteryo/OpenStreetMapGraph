@@ -50,11 +50,14 @@ def WriteToSvg(osmName, svgName="graph.svg", enlargementKoef=100):
     with open(osmName, encoding="utf_8_sig") as f:
         xml = f.read()
     root = objectify.fromstring(xml)
+
     minCoordY, minCoordX = LatLongToMerc(float(root.getchildren()[0].attrib['minlon']),
                                          float(root.getchildren()[0].attrib['minlat']))
+    centerX = ((LatToMerc(float(root.getchildren()[0].attrib['maxlat'])) + minCoordX) / 2 - minCoordX)/enlargementKoef
+    centerY = ((LongToMerc(float(root.getchildren()[0].attrib['maxlon'])) + minCoordY) / 2 - minCoordY)/enlargementKoef
     nodes_dict = {
-        node.attrib['id']: ((LatToMerc(float(node.attrib['lat'])) - minCoordX) / enlargementKoef,
-                            (LongToMerc(float(node.attrib['lon'])) - minCoordY) / enlargementKoef)
+        node.attrib['id']: (centerX + ((LongToMerc(float(node.attrib['lon'])) - minCoordY) / enlargementKoef - centerY),
+                            centerY - ((LatToMerc(float(node.attrib['lat'])) - minCoordX) / enlargementKoef - centerX))
         for node in root.xpath('//node')}
     for way in tqdm(root.xpath("//way[.//tag[@k = 'highway']]")):
         if (way.xpath("tag[@k = 'highway']")[0].attrib['v'] in ValidHighways):
@@ -63,7 +66,9 @@ def WriteToSvg(osmName, svgName="graph.svg", enlargementKoef=100):
                 if (nd.attrib['ref'] in nodes_dict):
                     points.append(nodes_dict[nd.attrib['ref']])
             if len(points) > 0:
-                dwg.add(dwg.polyline(points, stroke='blue', fill='none', stroke_width=0.1))
+                dwg.add(dwg.polyline(points, stroke='brown' if way.xpath("tag[@k = 'highway']")[0].attrib['v'] == 'primary'
+                                     else 'blue', fill='none', stroke_width=0.8
+                if way.xpath("tag[@k = 'highway']")[0].attrib['v'] == 'primary' else 0.2))
     print("Writing to {0} has ended successfully!".format(svgName))
     dwg.save()
 
@@ -131,6 +136,7 @@ if __name__ == "__main__":
                         action='store_true')
     parser.add_argument("-o", "--osmname", help="Name of the OSM file", default="Nizhny_Novgorod.osm")
     parser.add_argument("-sn", "--svgname", help="Name of the SVG file", default="graph.svg")
+    parser.add_argument("-e", "--enlargementcoeff", help="Enlargement coefficient", type=int, default=70)
     parser.add_argument("-ln", "--listname", help="Name of the adjacency list file", default="adjacencyList.csv")
     parser.add_argument("-mn", "--matrixname", help="Name of the adjacency matrix file", default="adjacencyMatrix.csv")
     args = parser.parse_args()
@@ -140,6 +146,6 @@ if __name__ == "__main__":
             "Please provide at least one argument. Run {0} -h for help".format(inspect.getfile(inspect.currentframe())))
 
     if args.writetosvg:
-        WriteToSvg(args.osmname, svgName=args.svgname)
+        WriteToSvg(args.osmname, svgName=args.svgname, enlargementKoef=args.enlargementcoeff)
     if args.writelist or args.writematrix:
         WriteToCSV(args.osmname, args.listname, args.matrixname, args.writelist, args.writematrix)
