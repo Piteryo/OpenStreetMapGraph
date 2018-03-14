@@ -8,6 +8,7 @@ import svgwrite
 from lxml import objectify
 from tqdm import tqdm
 
+
 a = 6378137.0
 b = 6356752.3142
 
@@ -62,7 +63,7 @@ def WriteToSvg(osmName, svgName="graph.svg", enlargementKoef=100):
                 if (nd.attrib['ref'] in nodes_dict):
                     points.append(nodes_dict[nd.attrib['ref']])
             if len(points) > 0:
-                dwg.add(dwg.polyline(points, stroke='blue', fill='none'))
+                dwg.add(dwg.polyline(points, stroke='blue', fill='none', stroke_width=0.1))
     print("Writing to {0} has ended successfully!".format(svgName))
     dwg.save()
 
@@ -86,14 +87,11 @@ def WriteAdjacencyMatrixToCSV(csv_file, dict_data):
         writer.writerow(['sep=,'])
         nodes = {node: val for (node, val) in dict_data.items() if len(val) > 0}
         writer.writerow(['', *nodes.keys()])
-        nodesLength = len(nodes)
-        nodes_list = list(nodes.keys())
         for key, val in tqdm(nodes.items()):
-            buf_line = np.zeros(nodesLength, dtype=int)
-            for adj in val:
-                if (adj in nodes_list):
-                    buf_line[nodes_list.index(adj)] = 1
-            writer.writerow([key, *buf_line])
+            sb = []
+            for adj in nodes.keys():
+                sb.append('1,' if (adj in val) else '0,')
+            writer.writerow([key, *sb])
     print("Writing to {0} has ended successfully!".format(csv_file))
 
 
