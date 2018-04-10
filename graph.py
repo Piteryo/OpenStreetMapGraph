@@ -3,7 +3,6 @@ import csv
 import inspect
 import math
 
-import numpy as np
 import svgwrite
 from lxml import objectify
 from tqdm import tqdm
@@ -50,6 +49,7 @@ def WriteToSvg(osmName, svgName="graph.svg", enlargementKoef=100):
     with open(osmName, encoding="utf_8_sig") as f:
         xml = f.read()
     root = objectify.fromstring(xml)
+    
 
     minCoordY, minCoordX = LatLongToMerc(float(root.getchildren()[0].attrib['minlon']),
                                          float(root.getchildren()[0].attrib['minlat']))
@@ -71,6 +71,7 @@ def WriteToSvg(osmName, svgName="graph.svg", enlargementKoef=100):
                 if way.xpath("tag[@k = 'highway']")[0].attrib['v'] == 'primary' else 0.2))
     print("Writing to {0} has ended successfully!".format(svgName))
     dwg.save()
+    f.close()
 
 
 def WriteAdjacencyListToCSV(csv_file, dict_data):
