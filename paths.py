@@ -141,7 +141,192 @@ def a_star_search(adjacencyList, start, goal, goalID, heuristic):
     return came_from, sum(cost_so_far.values())
 
 
+def nearestNeighbourAlgorithm(weights, startNode, startNodeID):
+    curNode = startNode
+    whatToDelete = ''
+    road = [startNodeID]
+    length = 0
+    while weights:
+        min = sys.maxsize
+        for weight in weights:
+            if weight in curNode and curNode[weight] < min:
+                min = curNode[weight]
+                curNode = weights[weight]
+                whatToDelete = weight
+        length += min
+        road.append(whatToDelete)
+        if (len(weights) == 1):
+            length += curNode[startNodeID]
+            road.append(startNodeID)
+        weights.pop(whatToDelete, None)
+    print(length)
+    return road
+
+
+def annealingSimulation(weights, startNode, startNodeID):
+    tour = list(weights.keys())
+    tour[1:] = random.sample(tour[1:], len(tour) - 1)
+    for temperature in numpy.logspace(0, 5, num=100000)[::-1]:
+        [i, j] = sorted(random.sample(range(1, len(tour)-1), 2))
+        newTour = tour[:i] + tour[j:j+1] + \
+            tour[i+1:j] + tour[i:i+1] + tour[j+1:]
+        oldDistances = weights[tour[i-1]][tour[i]] + weights[tour[i]][tour[i+1]] + \
+            weights[tour[j-1]][tour[j]] + weights[tour[j]
+                ][tour[j+1]] if j + 1 < len(tour) else 0
+        newDistances = weights[newTour[i-1]][newTour[i]] + weights[newTour[i]][newTour[i+1]] + \
+            weights[newTour[j-1]][newTour[j]] + weights[newTour[j]
+                ][newTour[j+1]] if j + 1 < len(newTour) else 0
+
+    try:
+        if math.exp((oldDistances - newDistances) / temperature) > random.random():
+            tour = newTour
+    except OverflowError:
+        pass
+    prevNode = tour[0]
+    sum = 0
+    for node in tour[1:]:
+        sum += weights[prevNode][node]
+        prevNode = node
+    print(sum)
+    return tour
+
+
+def VisualizeTSP(osmName, paths, salesManInnerPaths):
+    lats = {}
+    lons = {}
+    roads = []
+    iter = 0
+    for event, element in etree.iterparse(osmName, tag="node"):
+        if event == 'end':
+            lats[element.attrib["id"]] = element.attrib['lat']
+            lons[element.attrib["id"]] = element.attrib['lon']
+        element.clear()
+        while element.getprevious() is not None:
+            del element.getparent()[0]
+
+
+    roads = []
+    iter = 0
+    pbar = tqdm()
+    for event, element in etree.iterparse(osmName, tag="way"):
+        if len(element.xpath("tag[@k = 'highway']")) > 0 and (element.xpath("tag[@k = 'highway']")[0].attrib['v'] in ValidHighways):
+            prevRef = None
+            iter = 0
+            for child in element.iterchildren(tag="nd"):
+                if child.attrib['ref'] in lons:
+                    if child.getprevious() is not None and prevRef is not None:
+                        if iter % 7 == 0 and child.getnext() is not None:
+                            roads.append(
+                                dict(
+                                    type='scattergeo',
+                                    lon=[lons[prevRef],
+                                        lons[child.attrib["ref"]]],
+                                    lat=[lats[prevRef],
+                                        lats[child.attrib["ref"]]],
+                                    mode='lines',
+                                    hoverinfo=element.xpath(
+                                        "//way[tag[@k = 'highway']]/tag[@k='name']/@v"),
+                                    line=dict(
+                                        width=1,
+                                        color='rgb(88, 38, 38)',
+                                    ),
+                                )
+                            )
+                            prevRef = child.attrib["ref"]
+                        iter += 1
+                    elif child.getprevious() is None:
+                        prevRef = child.attrib["ref"]
+                child.clear()
+                if child.getnext() is None:
+                    while child.getprevious() is not None:
+                        del child.getparent()[0]
+        element.clear()
+        while element.getprevious() is not None:
+            del element.getparent()[0]
+        pbar.update(1)
+    pbar.close()
     
+    iter = 0
+    pbar = tqdm()
+    prevOuterNode = paths[0]
+
+    # points = []
+    # for point in paths:
+    points = [
+        dict(
+            type='scattergeo',
+            lon=[lons[point] for point in paths],
+            lat=[lats[point] for point in paths],
+            hoverinfo='text',
+            mode="markers+text",
+            text = [idx for idx, _ in enumerate(paths)],
+            textposition = 'bottom',
+            marker=dict(
+                size=2,
+                color='rgb(255, 0, 0)',
+                line=dict(
+                    width=8,
+                    color='rgba(68, 68, 68, 0)'
+                )
+            )
+        )
+    ]
+
+    for idx, destination in enumerate(paths[1:]):
+        curNode = '0'
+        prevNode = destination
+        while curNode != prevOuterNode:
+            if prevNode not in salesManInnerPaths[(prevOuterNode, destination)] or salesManInnerPaths[(prevOuterNode, destination)][prevNode] == None:
+                break
+            curNode = salesManInnerPaths[(
+                prevOuterNode, destination)][prevNode]
+            roads.append(
+                dict(
+                    type='scattergeo',
+                    lon=[lons[prevNode], lons[curNode]],
+                    lat=[lats[prevNode], lats[curNode]],
+                    mode='lines',
+                    hoverinfo=f"Path #{idx}",
+                    line=dict(
+                        width=1,
+                        color='green',
+                    ),
+                )
+            )
+            prevNode = curNode
+        iter += 1
+        pbar.update(1)
+        if (iter == 10):
+            break
+    pbar.close()
+
+    layout = dict(
+        title='Nizhny Novgorod paths',
+        showlegend=False,
+        geo=dict(
+            scope='world',
+            projection=dict(type='Mercur'),
+            showland=True,
+            lonaxis=dict(
+                showgrid=True,
+                gridwidth=0.5,
+                dtick=0.5,
+                range=[43.72705, 44.11196]),
+            lataxis=dict(
+                showgrid=True,
+                gridwidth=0.5,
+                gridcolor="#afb5bf",
+                dtick=0.5,
+                range=[56.18765, 56.40198]),
+            landcolor='rgb(243, 243, 243)',
+            countrycolor='rgb(196, 204, 204)',
+        ),
+    )
+    fig = dict(data=roads+points, layout=layout)
+    plotly.offline.plot(fig, filename='tsp2', image='png',
+                        image_filename='tsp2.png')
+
+
 def WriteToPlotlyGraph(osmName, paths, destinations, startNode, is_astar, distances):
     lats = {}
     lons = {}
@@ -496,3 +681,71 @@ if __name__ == "__main__":
         print("Elapsed time is {}!".format(end - start))
         print('Starting drawing to Plotly!')
         WriteToPlotlyGraph("Nizhny_Novgorod.osm", paths, validDestinations, cur, args.astare or args.astarm or args.astarch) 
+    cur='2046971638'
+
+
+
+
+
+    
+# # TIME FOR 3 TASK!
+    salesManCosts={}
+    salesManPaths={}
+    salesmanWeightsName="salesmanWeightsName.bin"
+    salesManPathsName="salesmanPathsName.bin"
+    if not os.path.exists(salesmanWeightsName) or not os.path.exists(salesManPathsName):
+        destCount=0
+        index=len(destinations) - 1
+        paths={}
+        pbar=tqdm(total=11)
+        validDestinations=[cur]
+        while destCount < 11:
+            if (destinations[index] in adjacencyDict.keys()):
+                result, cost=a_star_search(adjacencyDict, cur, list(
+                    adjacencyDict[destinations[index]].values())[0][1], destinations[index], Euclid)
+                if destinations[index] in result:
+                    paths[destinations[index]]=cost
+                    salesManPaths[(cur, destinations[index])]=result
+                    validDestinations.append(destinations[index])
+                    destCount += 1
+                    pbar.update(1)
+            index -= 1
+            # if index >= len(destinations):
+            #     raise Exception('Vse ploho!')
+        pbar.close()
+        salesManCosts[cur]=paths
+
+        for validDestination in tqdm(validDestinations):
+            for anotherValidDestination in tqdm(validDestinations):
+                if validDestination != anotherValidDestination:
+                    result, cost=a_star_search(adjacencyDict, validDestination, list(
+                        adjacencyDict[anotherValidDestination].values())[0][1], anotherValidDestination, Euclid)
+                    salesManCosts.setdefault(validDestination, {}).update(
+                        {anotherValidDestination: cost})
+                    salesManPaths[(validDestination,
+                                anotherValidDestination)]=result
+        with open(salesmanWeightsName, 'wb+') as saleFile:
+            pickle.dump(salesManCosts, saleFile)
+        with open(salesManPathsName, 'wb+') as saleFile:
+            pickle.dump(salesManPaths, saleFile)
+    else:
+        with open(salesmanWeightsName, 'rb') as saleFile:
+            salesManCosts=pickle.load(saleFile)
+        with open(salesManPathsName, 'rb') as saleFile:
+            salesManPaths=pickle.load(saleFile)
+    temp=copy.deepcopy(salesManCosts)
+
+    VisualizeTSP("Nizhny_Novgorod.osm", annealingSimulation(salesManCosts, cur, cur),  salesManPaths)
+
+#,
+
+
+
+
+
+
+#     # paths = Dijkstra(adjacencyDict, cur)
+#     # WriteToSvgWithPaths("Nizhny_Novgorod.osm", paths, destinations)
+#    # WriteToPlotlyGraph("Nizhny_Novgorod.osm", paths, validDestinations, cur)
+
+#     # root.xpath("")
